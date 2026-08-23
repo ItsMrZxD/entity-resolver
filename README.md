@@ -5,41 +5,15 @@
 Fuzzy entity resolution between two CSV datasets that contain the same
 companies under slightly different names. Every record in dataset A is
 matched to its most similar record in dataset B with a 0–100 confidence
-score, tolerating typos, abbreviations, legal suffixes (Inc., LLC, Ltd., …),
-punctuation differences, and word-order changes.
-
-Built with **Python 3.11+**, **pandas**, and **RapidFuzz**.
-
-## Project structure
-
-```
-entity-resolver/
-├── .github/
-│   └── workflows/
-│       └── ci.yml       # CI: Ruff lint + unit tests on every push
-├── data/
-│   ├── dataset_a.csv    # input names (auto-generated sample if missing)
-│   └── dataset_b.csv    # candidate names to match against
-├── output/              # created at runtime, not committed
-│   ├── matches.csv                   # all matches, sorted by confidence
-│   ├── matches_high_confidence.csv   # matches >= threshold
-│   └── matches_low_confidence.csv    # matches < threshold (need review)
-├── main.py
-├── test_main.py
-├── pyproject.toml       # lint configuration
-├── requirements.txt
-├── LICENSE
-└── README.md
-```
+score.
 
 ## Installation
 
+Needs Python 3.11+; pandas and RapidFuzz come from `requirements.txt`.
+
 ```bash
-cd entity-resolver
 python -m venv .venv
-.venv\Scripts\Activate.ps1     # Windows PowerShell
-# .venv\Scripts\activate.bat   # Windows cmd
-# source .venv/bin/activate    # Linux / macOS
+.venv\Scripts\Activate.ps1    # Linux / macOS: source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -98,7 +72,7 @@ ruff check .
 |--------|--------------|----------|
 | `token_sort_ratio` | Sorts the words in both names, then compares. Fixes word-order differences, but every word still has to be present. | Names with shuffled word order and few extra words. |
 | `token_set_ratio` | Compares the *intersection* of words to each name. Extra words on one side barely hurt the score. | Names where one side has extra words (`"Tesla Motors"` vs `"Tesla"` → 100). Riskier: a short name inside a longer unrelated one also scores 100. |
-| `WRatio` | RapidFuzz's weighted combination of several strategies with length penalties. | General-purpose default — robust without token_set's false-positive risk. |
+| `WRatio` | RapidFuzz's weighted combination of several strategies with length penalties. | General-purpose default; avoids token_set's false-positive risk. |
 
 Benchmarked on the sample data with `python main.py --compare`:
 

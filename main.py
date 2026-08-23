@@ -1,9 +1,7 @@
 """Fuzzy entity resolution between two CSV datasets of company names.
 
 Matches every record in dataset A to its most similar record in dataset B
-using RapidFuzz string similarity, tolerating typos, abbreviations, legal
-suffixes (Inc., LLC, ...), punctuation differences, and word-order changes.
-Each match is reported with a 0-100 confidence score.
+using RapidFuzz, reporting each match with a 0-100 confidence score.
 
 Usage:
     python main.py                        # run with defaults
@@ -30,9 +28,6 @@ try:
 except ImportError:  # progress bars are optional; matching works without them
     tqdm = None  # type: ignore[assignment]
 
-# --------------------------------------------------------------------------
-# Configuration
-# --------------------------------------------------------------------------
 
 PROJECT_DIR = Path(__file__).resolve().parent
 DEFAULT_DATA_DIR = PROJECT_DIR / "data"
@@ -53,7 +48,6 @@ LEGAL_SUFFIXES: frozenset[str] = frozenset({
 # "Coca Cola" clean to the same string.
 _PUNCT_TO_SPACE = str.maketrans({ch: " " for ch in string.punctuation})
 
-# Similarity metrics available on the command line (--scorer).
 SCORERS: dict[str, Callable[..., float]] = {
     "token_sort": fuzz.token_sort_ratio,
     "token_set": fuzz.token_set_ratio,
@@ -61,9 +55,6 @@ SCORERS: dict[str, Callable[..., float]] = {
 }
 DEFAULT_SCORER = "wratio"
 
-# --------------------------------------------------------------------------
-# Sample data
-# --------------------------------------------------------------------------
 
 # Intentionally messy: legal suffixes, punctuation, abbreviations, typos,
 # word-order noise, one blank entry, an acronym (IBM), and one company that
@@ -100,16 +91,10 @@ SAMPLE_B = [
     "Oracle Corporation",               # no counterpart in A
 ]
 
-# --------------------------------------------------------------------------
-# Data loading
-# --------------------------------------------------------------------------
-
 
 def generate_sample_data(data_dir: Path) -> None:
-    """Create small example CSVs when no input data exists yet.
-
-    Existing files are never overwritten, so users can drop in their own
-    ``dataset_a.csv`` / ``dataset_b.csv`` and this becomes a no-op.
+    """Create example CSVs, never overwriting existing files, so dropping in
+    your own ``dataset_a.csv`` / ``dataset_b.csv`` makes this a no-op.
     """
     data_dir.mkdir(parents=True, exist_ok=True)
     for filename, names in (("dataset_a.csv", SAMPLE_A), ("dataset_b.csv", SAMPLE_B)):
@@ -124,10 +109,8 @@ def generate_sample_data(data_dir: Path) -> None:
 
 
 def load_dataset(path: Path) -> pd.DataFrame:
-    """Load a CSV containing a ``name`` column.
-
-    Rows with missing or blank names are dropped (and reported) rather than
-    crashing the matcher downstream.
+    """Load a CSV with a ``name`` column, dropping and reporting rows whose
+    name is missing or blank.
     """
     df = pd.read_csv(path)
     if "name" not in df.columns:
@@ -143,27 +126,14 @@ def load_dataset(path: Path) -> pd.DataFrame:
     return df
 
 
-# --------------------------------------------------------------------------
-# Name cleaning
-# --------------------------------------------------------------------------
-
-
 def clean_name(name: str) -> str:
-    """Normalize a raw name so cosmetic differences don't hurt matching.
-
-    Steps: lowercase, replace punctuation with spaces, collapse whitespace,
-    then strip trailing legal suffixes. "Coca-Cola Company, Inc." and
-    "coca cola" clean to the same string.
+    """Normalize a name so cosmetic differences don't hurt matching:
+    "Coca-Cola Company, Inc." and "coca cola" clean to the same string.
     """
     tokens = name.lower().translate(_PUNCT_TO_SPACE).split()
     while tokens and tokens[-1] in LEGAL_SUFFIXES:
         tokens.pop()
     return " ".join(tokens)
-
-
-# --------------------------------------------------------------------------
-# Fuzzy matching
-# --------------------------------------------------------------------------
 
 
 def match_datasets(
@@ -172,13 +142,10 @@ def match_datasets(
     scorer: Callable[..., float],
     show_progress: bool = True,
 ) -> pd.DataFrame:
-    """Match every name in dataset A to its most similar name in dataset B.
+    """Match every name in A to its closest name in B.
 
-    Names are compared in cleaned form (see :func:`clean_name`) so that
-    suffixes and punctuation don't dominate the score, but the returned
-    DataFrame keeps the original spellings so results stay traceable to the
-    input files. ``process.extractOne`` scans all of B for each A record and
-    returns the single best match with its 0-100 similarity score.
+    Comparison runs on cleaned names so suffixes and punctuation don't
+    dominate the score, but the result keeps the original spellings.
     """
     choices = [clean_name(name) for name in df_b["name"]]
     names_a = df_a["name"].tolist()
@@ -210,7 +177,6 @@ def match_datasets(
 def compare_scorers(
     df_a: pd.DataFrame, df_b: pd.DataFrame, threshold: float
 ) -> None:
-    """Run every available scorer and print a side-by-side comparison."""
     print(f"\nScorer comparison (threshold = {threshold:g}):\n")
     print(f"{'scorer':<12} {'avg confidence':>15} {'high (>= thr)':>14}"
           f" {'low (< thr)':>12}")
@@ -222,18 +188,12 @@ def compare_scorers(
     print()
 
 
-# --------------------------------------------------------------------------
-# Output & reporting
-# --------------------------------------------------------------------------
-
-
 def write_outputs(
     matches: pd.DataFrame,
     output_dir: Path,
     threshold: float,
     only_above_threshold: bool,
 ) -> None:
-    """Write the match results plus high/low confidence splits to CSV."""
     output_dir.mkdir(parents=True, exist_ok=True)
     high = matches[matches["confidence_score"] >= threshold]
     low = matches[matches["confidence_score"] < threshold]
@@ -246,7 +206,6 @@ def write_outputs(
 
 
 def print_summary(matches: pd.DataFrame, threshold: float) -> None:
-    """Print summary statistics for a completed matching run."""
     total = len(matches)
     above = int((matches["confidence_score"] >= threshold).sum())
     avg = matches["confidence_score"].mean() if total else 0.0
@@ -258,13 +217,7 @@ def print_summary(matches: pd.DataFrame, threshold: float) -> None:
     print(f"  Below threshold ({threshold:g}) : {total - above}")
 
 
-# --------------------------------------------------------------------------
-# CLI
-# --------------------------------------------------------------------------
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Define and parse the command-line interface."""
     parser = argparse.ArgumentParser(
         description="Fuzzy-match company names between two CSV datasets."
     )
@@ -303,7 +256,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point: load data, match, and report."""
     args = parse_args(argv)
 
     generate_sample_data(args.data_dir)
